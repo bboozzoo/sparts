@@ -170,25 +170,28 @@ class DBusServiceTask(DBusTask):
             return Gio.BusType.SYSTEM
         return Gio.BusType.SESSION
 
-    def _nameLost(self, connection, name):
-        print('name lost')
+    def nameLost(self, connection, name):
+        """Override"""
+        self.logger.debug('name lost() %r %s', connection, name)
         raise DBusServiceError('Failed to acquire name %s' % self.bus_name)
 
-    def _nameAcquired(self, connection, name):
-        print('name acquired')
+    def nameAcquired(self, connection, name):
+        """Override"""
+        self.logger.debug('name acquired() %r %s', connection, name)
 
-    def _busAcquired(self, connection, name):
-        print('bus acquired: %r addr: %s', connection, name)
+    def busAcquired(self, connection, name):
+        """Override"""
+        self.logger.debug('bus acquired: %r addr: %s', connection, name)
 
     def start(self):
         bus_type = self._getBusType()
         print('bus_own_name() start')
         Gio.bus_own_name(bus_type, self.bus_name,
                          Gio.BusNameOwnerFlags.NONE,
-                         self._busAcquired,
-                         self._nameAcquired,
-                         self._nameLost)
-        print('bus_own_name() finished')
+                         self.busAcquired,
+                         self.nameAcquired,
+                         self.nameLost)
+        self.logger.debug('bus_own_name() finished')
         self.addHandlers()
         super(DBusServiceTask, self).start()
 
