@@ -83,6 +83,7 @@ class VTask(_SpartsObject):
         if not self.LOOPLESS:
             for thread in self.threads:
                 while thread.isAlive():
+                    print('try join() %r' % repr(thread))
                     thread.join(0.5)
 
     @property

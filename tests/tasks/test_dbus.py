@@ -6,36 +6,45 @@
 #
 from sparts.tests.base import MultiTaskTestCase, Skip
 try:
-    import dbus
     from sparts.tasks.dbus import DBusServiceTask, DBusMainLoopTask
+    import dbus
 except ImportError:
     raise Skip("dbus support is required to run this test")
 
 from sparts.sparts import option
 from random import getrandbits
+import time
+
+class BaseTestDBusTask(DBusServiceTask):
+    def start(self):
+        try:
+            print('call start()')
+            super(BaseTestDBusTask, self).start()
+        except dbus.DBusException as err:
+            print('got exception')
+            self.acquire_name_error = str(err)
+        self.stop()
 
 
-class TestDBusTask(DBusServiceTask):
+class TestDBusSessionTask(BaseTestDBusTask):
+    OPT_PREFIX = 'dbus-session'
     BUS_NAME = 'com.github.facebook.test-{}'.format(getrandbits(32))
 
 
-class TestDBusSystemTask(DBusServiceTask):
+class TestDBusSystemTask(BaseTestDBusTask):
+    OPT_PREFIX = 'dbus-system'
     BUS_NAME = 'com.github.facebook.systemtest'
     USE_SYSTEM_BUS = True
 
-    def start(self):
-        try:
-            super(TestDBusSystemTask, self).start()
-        except dbus.DBusException as err:
-            self.acquire_name_error = str(err)
-
 
 class TestDBus(MultiTaskTestCase):
-    TASKS = [TestDBusTask, DBusMainLoopTask]
+    TASKS = [TestDBusSessionTask, DBusMainLoopTask]
 
     def test_session_bus(self):
-        bus = dbus.SessionBus(private=True)
-        self.assertTrue(bus.name_has_owner(TestDBusTask.BUS_NAME))
+        # expecting session task to have been started without error
+        t = self.service.getTask(TestDBusSessionTask)
+        err = getattr(t, 'acquire_name_error', None)
+        self.assertEqual(err, None)
 
 
 class TestSystemDBus(MultiTaskTestCase):
@@ -46,5 +55,5 @@ class TestSystemDBus(MultiTaskTestCase):
         t = self.service.getTask(TestDBusSystemTask)
         err = getattr(t, 'acquire_name_error', None)
         self.assertNotNone(err)
-
+        print('err:', err)
         self.assertTrue(err.startswith('org.freedesktop.DBus.Error.AccessDenied'))

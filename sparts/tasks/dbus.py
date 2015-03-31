@@ -24,6 +24,10 @@ import gobject
 import glib
 import time
 
+glib.threads_init()
+gobject.threads_init()
+dbus.mainloop.glib.threads_init()
+
 
 class VServiceDBusObject(dbus.service.Object):
     """DBus interface implementation that exports common VService methods"""
@@ -98,14 +102,20 @@ class DBusMainLoopTask(VTask):
         if not needed:
             raise SkipTask("No DBusTasks found or enabled")
 
+        # if not DBusMainLoopTask.THREADS_INITED:
+        #     print("init threads")
+        #     glib.threads_init()
+        #     gobject.threads_init()
+        #     dbus.mainloop.glib.threads_init()
+        #     DBusMainLoopTask.THREADS_INITED = True
         self.dbus_loop = DBusGMainLoop(set_as_default=True)
-        glib.threads_init()
-        gobject.threads_init()
-        dbus.mainloop.glib.threads_init()
         self.mainloop = gobject.MainLoop()
 
     def _runloop(self):
+        print ('loop run() %r' % (self.mainloop))
         self.mainloop.run()
+        self.mainloop = None
+        print ('loop done')
 
     def stop(self):
         super(DBusMainLoopTask, self).stop()
@@ -113,13 +123,15 @@ class DBusMainLoopTask(VTask):
         if self.mainloop is None:
             return
 
+        print('loop quit: %r' % (self.mainloop))
         self.mainloop.quit()
+        print('after loop quit')
 
         # OK!  Apparently, there is some wonky destructor event handling that
         # seems to work better than just calling .quit() in order to properly
         # return full control of signal handling, threads, etc to the actual
         # main process.
-        self.mainloop = None
+        # self.mainloop = None
 
 class DBusTask(VTask):
     """Base Class for Tasks that depend on the DBus Main Loop"""
@@ -182,9 +194,15 @@ class DBusServiceTask(DBusTask):
                 self.fb303_dbus = FB303DbusService(
                     self.dbus_service, task, self.service.name)
 
+    def _runloop(self):
+        super(DBusServiceTask, self)._runloop()
+        print('loop stopped')
+        self.bus.close()
+
     def stop(self):
+        super(DBusServiceTask, self).stop()
+        print('service stopped')
         if self.dbus_service is not None:
             self.dbus_service = None
 
-        #self.bus.close()
-        super(DBusServiceTask, self).stop()
+        self.bus = None
