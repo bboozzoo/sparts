@@ -18,6 +18,7 @@ except ImportError:
     HAVE_FB303 = False
 
 from gi.repository import Gio, GLib
+from concurrent.futures import Future
 import time
 
 # early init of GLib threading support
@@ -103,6 +104,7 @@ class DBusMainLoopTask(VTask):
         self.mainloop = GLib.MainLoop.new(None, False)
 
     def _runloop(self):
+        self.logger.debug('loop run()')
         self.mainloop.run()
 
     def stop(self):
@@ -166,6 +168,8 @@ class DBusServiceTask(DBusTask):
             "You must pass a --{task}-bus-name"
 
     def _getBusType(self):
+        self.logger.debug('bus type: %s',
+                          'system' if self.system_bus else 'session')
         if self.system_bus:
             return Gio.BusType.SYSTEM
         return Gio.BusType.SESSION
@@ -183,15 +187,26 @@ class DBusServiceTask(DBusTask):
         """Override"""
         self.logger.debug('bus acquired: %r addr: %s', connection, name)
 
-    def start(self):
+    def _asyncStartCb(self, res):
         bus_type = self._getBusType()
-        print('bus_own_name() start')
+        self.logger.debug('bus_own_name() start')
         Gio.bus_own_name(bus_type, self.bus_name,
                          Gio.BusNameOwnerFlags.NONE,
                          self.busAcquired,
                          self.nameAcquired,
                          self.nameLost)
         self.logger.debug('bus_own_name() finished')
+        res.set_result(True)
+
+    def scheduleStart(self):
+        self.logger.debug('schedule start()')
+        ft = Future()
+        GLib.idle_add(self._asyncStartCb, ft)
+        ft.result()
+        self.logger.debug('task started()')
+
+    def start(self):
+        self.scheduleStart();
         self.addHandlers()
         super(DBusServiceTask, self).start()
 
