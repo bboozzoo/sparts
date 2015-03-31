@@ -83,7 +83,7 @@ class VTask(_SpartsObject):
         if not self.LOOPLESS:
             for thread in self.threads:
                 while thread.isAlive():
-                    print('try join() %r' % repr(thread))
+                    self.logger.debug('try join() %r' % repr(thread))
                     thread.join(0.5)
 
     @property
@@ -342,6 +342,7 @@ class Tasks(object):
         """Start all the tasks, creating worker threads, etc"""
         assert self._did_create
         for t in self.tasks:
+            self.logger.debug('starting task %s', t.name)
             t.start()
 
     def get(self, task):

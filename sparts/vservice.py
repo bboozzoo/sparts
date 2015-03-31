@@ -217,6 +217,7 @@ class VService(_SpartsObject):
             self.logger.info('KeyboardInterrupt Received!  Stopping Tasks...')
 
         for t in reversed(self.tasks):
+            self.logger.debug('stopping task %s', t.name)
             t.stop()
 
         try:
