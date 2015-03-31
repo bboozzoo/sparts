@@ -12,41 +12,44 @@ try:
 except ImportError:
     raise Skip("dbus support is required to run this test")
 
-from concurrent.futures import Future
 from sparts.sparts import option
 from random import getrandbits
+from concurrent.futures import Future
 
 
-class TestDBusTask(DBusServiceTask):
+class BaseTestDBusTask(DBusServiceTask):
+
+    def __init__(self, *args, **kwargs):
+        super(BaseTestDBusTask, self).__init__(*args, **kwargs)
+        self.name_acquire = Future()
+
+    def nameAcquired(self, connection, name):
+        self.name_acquire.set_result(True)
+
+    def nameLost(self, connection, name):
+        self.name_acquire.set_result(False)
+
+
+class TestDBusTask(BaseTestDBusTask):
     BUS_NAME = 'com.github.facebook.test-{}'.format(getrandbits(32))
 
 
-class TestDBusSystemTask(DBusServiceTask):
+class TestDBusSystemTask(BaseTestDBusTask):
     BUS_NAME = 'com.github.facebook.systemtest'
     USE_SYSTEM_BUS = True
-
-    def start(self):
-        try:
-            super(TestDBusSystemTask, self).start()
-        except DBusServiceError as err:
-            self.acquire_name_error = str(err)
 
 
 class TestDBus(MultiTaskTestCase):
     TASKS = [TestDBusTask, DBusMainLoopTask]
 
-    def setUp(self):
-
-
     def test_session_bus(self):
+        t = self.service.getTask(TestDBusTask)
+        self.assertTrue(t.name_acquire.result())
 
 
 class TestSystemDBus(MultiTaskTestCase):
     TASKS = [TestDBusSystemTask, DBusMainLoopTask]
 
-    def setUp(self):
-
-
     def test_system_bus(self):
-
-        self.assertTrue(err.startswith('Failed to acquire name'))
+        t = self.service.getTask(TestDBusSystemTask)
+        self.assertFalse(t.name_acquire.result())
