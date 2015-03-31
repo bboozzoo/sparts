@@ -18,12 +18,11 @@ import time
 class BaseTestDBusTask(DBusServiceTask):
     def start(self):
         try:
-            print('call start()')
+            self.logger.debug('call start()')
             super(BaseTestDBusTask, self).start()
         except dbus.DBusException as err:
-            print('got exception')
+            self.logger.debug('got exception')
             self.acquire_name_error = str(err)
-        self.stop()
 
 
 class TestDBusSessionTask(BaseTestDBusTask):
@@ -55,5 +54,5 @@ class TestSystemDBus(MultiTaskTestCase):
         t = self.service.getTask(TestDBusSystemTask)
         err = getattr(t, 'acquire_name_error', None)
         self.assertNotNone(err)
-        print('err:', err)
+        self.logger.debug('err: %s', err)
         self.assertTrue(err.startswith('org.freedesktop.DBus.Error.AccessDenied'))
