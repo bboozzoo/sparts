@@ -11,76 +11,75 @@ from sparts.sparts import option
 from sparts.vtask import VTask, SkipTask
 
 try:
-    from sparts.fb303.dbus import FB303DbusService
-    from sparts.tasks.fb303 import FB303HandlerTask
+    # from sparts.fb303.dbus import FB303DbusService
+    # from sparts.tasks.fb303 import FB303HandlerTask
     HAVE_FB303 = True
 except ImportError:
     HAVE_FB303 = False
 
-from dbus.mainloop.glib import DBusGMainLoop
-import dbus
-import dbus.service
-import gobject
-import glib
+from gi.repository import Gio, GLib
 import time
 
+# early init of GLib threading support
+GLib.threads_init()
 
-class VServiceDBusObject(dbus.service.Object):
-    """DBus interface implementation that exports common VService methods"""
-    def __init__(self, dbus_service):
-        self.dbus_service = dbus_service
-        self.service = self.dbus_service.service
-        self.logger = self.dbus_service.logger
-        self.path = '/'.join(['', self.service.name, 'sparts'])
-        dbus.service.Object.__init__(self, self.dbus_service.bus, self.path)
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='s', out_signature='v')
-    def getOption(self, name):
-        return self.service.getOption(name)
+# class VServiceDBusObject(dbus.service.Object):
+#     """DBus interface implementation that exports common VService methods"""
+#     def __init__(self, dbus_service):
+#         self.dbus_service = dbus_service
+#         self.service = self.dbus_service.service
+#         self.logger = self.dbus_service.logger
+#         self.path = '/'.join(['', self.service.name, 'sparts'])
+#         dbus.service.Object.__init__(self, self.dbus_service.bus, self.path)
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='sv', out_signature='')
-    def setOption(self, name, value):
-        if value == '__None__':
-            value = None
-        self.service.setOption(name, value)
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='s', out_signature='v')
+#     def getOption(self, name):
+#         return self.service.getOption(name)
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='', out_signature='a{sv}')
-    def getOptions(self):
-        result = {}
-        for k, v in self.service.getOptions().iteritems():
-            # dbus doesn't support serializing None as a variant
-            if v is None:
-                v = '__None__'
-            result[k] = v
-        return result
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='sv', out_signature='')
+#     def setOption(self, name, value):
+#         if value == '__None__':
+#             value = None
+#         self.service.setOption(name, value)
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='', out_signature='as')
-    def listOptions(self):
-        return self.service.getOptions().keys()
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='', out_signature='a{sv}')
+#     def getOptions(self):
+#         result = {}
+#         for k, v in self.service.getOptions().iteritems():
+#             # dbus doesn't support serializing None as a variant
+#             if v is None:
+#                 v = '__None__'
+#             result[k] = v
+#         return result
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='', out_signature='')
-    def shutdown(self):
-        self.service.shutdown()
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='', out_signature='as')
+#     def listOptions(self):
+#         return self.service.getOptions().keys()
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='', out_signature='')
-    def restart(self):
-        self.service.reinitialize()
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='', out_signature='')
+#     def shutdown(self):
+#         self.service.shutdown()
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='', out_signature='as')
-    def listTasks(self):
-        return [t.name for t in self.service.tasks]
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='', out_signature='')
+#     def restart(self):
+#         self.service.reinitialize()
 
-    @dbus.service.method(dbus_interface='org.sparts.Service',
-                         in_signature='', out_signature='x')
-    def uptime(self):
-        return int(time.time() - self.service.start_time)
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='', out_signature='as')
+#     def listTasks(self):
+#         return [t.name for t in self.service.tasks]
+
+#     @dbus.service.method(dbus_interface='org.sparts.Service',
+#                          in_signature='', out_signature='x')
+#     def uptime(self):
+#         return int(time.time() - self.service.start_time)
 
 
 class DBusMainLoopTask(VTask):
@@ -98,11 +97,10 @@ class DBusMainLoopTask(VTask):
         if not needed:
             raise SkipTask("No DBusTasks found or enabled")
 
-        self.dbus_loop = DBusGMainLoop(set_as_default=True)
-        glib.threads_init()
-        gobject.threads_init()
-        dbus.mainloop.glib.threads_init()
-        self.mainloop = gobject.MainLoop()
+        # glib.threads_init()
+        # gobject.threads_init()
+        # dbus.mainloop.glib.threads_init()
+        self.mainloop = GLib.MainLoop.new(None, False)
 
     def _runloop(self):
         self.mainloop.run()
@@ -135,11 +133,16 @@ class DBusTask(VTask):
         return self.mainloop_task.mainloop
 
 
+class DBusServiceError(Exception):
+    """Wrapper for DBus related errors"""
+    pass
+
+
 class DBusServiceTask(DBusTask):
     """Glue Task for exporting this VService over dbus"""
     OPT_PREFIX = 'dbus'
     BUS_NAME = None
-    BUS_CLASS = VServiceDBusObject
+    # BUS_CLASS = VServiceDBusObject
     USE_SYSTEM_BUS = False
 
     bus_name = option(default=lambda cls: cls.BUS_NAME, metavar='NAME',
@@ -162,19 +165,35 @@ class DBusServiceTask(DBusTask):
         assert self.bus_name is not None, \
             "You must pass a --{task}-bus-name"
 
-    def _makeBus(self):
+    def _getBusType(self):
         if self.system_bus:
-            return dbus.SystemBus(private=True)
-        return dbus.SessionBus(private=True)
+            return Gio.BusType.SYSTEM
+        return Gio.BusType.SESSION
+
+    def _nameLost(self, connection, name):
+        print('name lost')
+        raise DBusServiceError('Failed to acquire name %s' % self.bus_name)
+
+    def _nameAcquired(self, connection, name):
+        print('name acquired')
+
+    def _busAcquired(self, connection, name):
+        print('bus acquired: %r addr: %s', connection, name)
 
     def start(self):
-        self.bus = self._makeBus()
-        self.dbus_service = dbus.service.BusName(self.bus_name, self.bus,
-            self.replace, self.replace, self.queue)
+        bus_type = self._getBusType()
+        print('bus_own_name() start')
+        Gio.bus_own_name(bus_type, self.bus_name,
+                         Gio.BusNameOwnerFlags.NONE,
+                         self._busAcquired,
+                         self._nameAcquired,
+                         self._nameLost)
+        print('bus_own_name() finished')
         self.addHandlers()
         super(DBusServiceTask, self).start()
 
     def addHandlers(self):
+        return
         self.sparts_dbus = self.BUS_CLASS(self)
         if HAVE_FB303:
             task = self.service.getTask(FB303HandlerTask)

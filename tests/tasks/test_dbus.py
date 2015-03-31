@@ -6,11 +6,13 @@
 #
 from sparts.tests.base import MultiTaskTestCase, Skip
 try:
-    import dbus
-    from sparts.tasks.dbus import DBusServiceTask, DBusMainLoopTask
+    from gi.repository import Gio
+    from sparts.tasks.dbus import DBusServiceTask, \
+        DBusMainLoopTask, DBusServiceError
 except ImportError:
     raise Skip("dbus support is required to run this test")
 
+from concurrent.futures import Future
 from sparts.sparts import option
 from random import getrandbits
 
@@ -26,25 +28,25 @@ class TestDBusSystemTask(DBusServiceTask):
     def start(self):
         try:
             super(TestDBusSystemTask, self).start()
-        except dbus.DBusException as err:
+        except DBusServiceError as err:
             self.acquire_name_error = str(err)
 
 
 class TestDBus(MultiTaskTestCase):
     TASKS = [TestDBusTask, DBusMainLoopTask]
 
+    def setUp(self):
+
+
     def test_session_bus(self):
-        bus = dbus.SessionBus(private=True)
-        self.assertTrue(bus.name_has_owner(TestDBusTask.BUS_NAME))
 
 
 class TestSystemDBus(MultiTaskTestCase):
     TASKS = [TestDBusSystemTask, DBusMainLoopTask]
 
-    def test_system_bus(self):
-        # expecting system task to fail due to missing DBus policy
-        t = self.service.getTask(TestDBusSystemTask)
-        err = getattr(t, 'acquire_name_error', None)
-        self.assertNotNone(err)
+    def setUp(self):
 
-        self.assertTrue(err.startswith('org.freedesktop.DBus.Error.AccessDenied'))
+
+    def test_system_bus(self):
+
+        self.assertTrue(err.startswith('Failed to acquire name'))
