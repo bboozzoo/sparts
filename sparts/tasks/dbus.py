@@ -115,10 +115,12 @@ class DBusMainLoopTask(VTask):
         self.mainloop = gobject.MainLoop()
 
     def _runloop(self):
+        self.logger.debug ('loop run() %r' % (self.mainloop))
         self.mainloop.run()
         # loop.quit() was called, run() has returned, meaning that
         # the loop no longer needed
         self.mainloop = None
+        self.logger.debug ('loop done')
 
     def stop(self):
         super(DBusMainLoopTask, self).stop()
@@ -126,9 +128,13 @@ class DBusMainLoopTask(VTask):
         if self.mainloop is None:
             return
 
+        self.logger.debug('loop quit: %r' % (self.mainloop))
         if not self.mainloop.is_running():
+            self.logger.debug('loop already quit()')
             return
+
         self.mainloop.quit()
+        self.logger.debug('after loop quit')
 
 
 class DBusTask(VTask):
@@ -150,6 +156,7 @@ class DBusTask(VTask):
         the result of computation. The callback will be run only once.
         """
         def _future_execute(f, cb, *args, **kwargs):
+            self.logger.debug('async run()')
             try:
                 # Only execute `cb` if the future wasn't cancelled
                 if f.set_running_or_notify_cancel():
@@ -168,6 +175,7 @@ class DBusTask(VTask):
         handle = glib.idle_add(partial(_future_execute, f,
                                        cb, *args, **kwargs))
         f.add_done_callback(partial(_future_cancel, handle))
+        self.logger.debug('async run return()')
         return f
 
 
@@ -204,6 +212,7 @@ class DBusServiceTask(DBusTask):
         return dbus.SessionBus(private=True)
 
     def _asyncStartCb(self):
+        self.logger.debug('start in main loop()')
         self.bus = self._makeBus()
         self.dbus_service = dbus.service.BusName(self.bus_name,
                                                  self.bus,
@@ -213,8 +222,10 @@ class DBusServiceTask(DBusTask):
         return True
 
     def _asyncStart(self):
+        self.logger.debug('schedule start()')
         res = self.asyncRun(self._asyncStartCb)
         res.result()
+        self.logger.debug('start done()')
 
     def start(self):
         self._asyncStart()
@@ -230,14 +241,17 @@ class DBusServiceTask(DBusTask):
                     self.dbus_service, task, self.service.name)
 
     def _asyncStopCb(self):
+        self.logger.debug('stop in main loop()')
         self.dbus_service = None
         self.bus = None
         return True
 
     def _asyncStop(self):
+        self.logger.debug('schedule stop()')
         res = self.asyncRun(self._asyncStopCb)
         res.result()
         # self.bus.close()
+        self.logger.debug('stop done()')
 
     def stop(self):
         """Run the bus cleanup code within the context of the main loop. The
@@ -246,3 +260,4 @@ class DBusServiceTask(DBusTask):
         """
         super(DBusServiceTask, self).stop()
         self._asyncStop()
+        self.logger.debug('service stopped')
